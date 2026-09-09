@@ -4,19 +4,19 @@ from torch.utils.data import Dataset
 
 class BiLingualData(Dataset):
 
-    def __init__(self, ds, tokenizer_src, tokeinizer_trgt, lang_src, lang_trgt, seq_len):
+    def __init__(self, ds, tokenizer_src, tokenizer_trgt, lang_src, lang_trgt, seq_len):
         super().__init__()
 
         self.ds=ds
         self.tokenizer_src=tokenizer_src
-        self.tokenizer_trgt=self.tokenizer_trgt
+        self.tokenizer_trgt=tokenizer_trgt
         self.lang_src=lang_src
         self.lang_trgt=lang_trgt
         self.seq_len=seq_len
 
-        self.sos_token=torch.Tensor([tokenizer_src.token_to_id(['[SOS]'])], dtype=torch.int64)
-        self.eos_token=torch.Tensor([tokenizer_src.token_to_id(['[EOS]'])], dtype=torch.int64)
-        self.pad_token=torch.Tensor([tokenizer_src.token_to_id(['[PAD]'])], dtype=torch.int64)
+        self.sos_token = torch.tensor([tokenizer_src.token_to_id('[SOS]')],dtype=torch.int64)
+        self.eos_token=torch.tensor([tokenizer_src.token_to_id('[EOS]')], dtype=torch.int64)
+        self.pad_token=torch.tensor([tokenizer_src.token_to_id('[PAD]')], dtype=torch.int64)
 
     def __len__(self):
         return len(self.ds)
@@ -40,26 +40,26 @@ class BiLingualData(Dataset):
                 self.sos_token,
                 torch.tensor(enc_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor(self.pad_token*enc_num_padding_tokens, dtype=torch.int64)
-            ]
+                torch.tensor([self.pad_token.item()]*enc_num_padding_tokens, dtype=torch.int64)
+            ],
+            dim=0
         )
 
         dec_input=torch.cat(
             [
                 self.sos_token,
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
-                torch.tensor(self.pad_token*dec_num_padding_tokens, dtype=torch.int64)
-            ]
+                torch.tensor([self.pad_token.item()]*dec_num_padding_tokens, dtype=torch.int64)
+            ], dim=0
         )
 
         label=torch.cat(
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor(self.pad_token*dec_num_padding_tokens, dtype=torch.int64)
-            ]
+                torch.tensor([self.pad_token.item()]*dec_num_padding_tokens, dtype=torch.int64)
+            ], dim=0
         )
-
         assert enc_input.size(0)==self.seq_len
         assert dec_input.size(0)==self.seq_len
         assert label.size(0)==self.seq_len

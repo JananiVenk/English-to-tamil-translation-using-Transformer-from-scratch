@@ -20,16 +20,16 @@ import warnings
 
 def get_all_sentences(ds, lang):
     for trans in ds:
-        yield ds[lang]
+        yield trans[lang]
 
 def get_or_build_tokenizer(config, ds, lang):
     tokenizer_path=Path(config['tokenizer_file'].format(lang))
     if not Path.exists(tokenizer_path):
-        tokenzier=Tokenizer(WordLevel(unk_token='[UNK]'))
-        tokenzier.pre_tokenizer=Whitespace()
+        tokenizer=Tokenizer(WordLevel(unk_token='[UNK]'))
+        tokenizer.pre_tokenizer=Whitespace()
         trainer=WordLevelTrainer(special_tokens=["[UNK]","[PAD]","[SOS]","[EOS]"], min_frequency=2)
-        tokenzier.train_from_iterator(get_all_sentences(ds, lang),trainer=trainer)
-        tokenzier.save(str(tokenizer_path))
+        tokenizer.train_from_iterator(get_all_sentences(ds, lang),trainer=trainer)
+        tokenizer.save(str(tokenizer_path))
     else:
         tokenizer=Tokenizer.from_file(str(tokenizer_path))
 
@@ -41,6 +41,12 @@ def get_ds(config):
     tokenizer_src=get_or_build_tokenizer(config, ds_raw,config['src_lang'])
     tokenizer_trgt=get_or_build_tokenizer(config, ds_raw,config['trgt_lang'])
 
+    ds_raw = ds_raw.filter(lambda x:
+            len(tokenizer_src.encode(x[config['src_lang']]).ids) <= config['seq_len'] - 2
+            and
+            len(tokenizer_trgt.encode(x[config['trgt_lang']]).ids) <= config['seq_len'] - 1
+    )
+
     train_ds_size=int(0.9*len(ds_raw))
     val_ds_size=len(ds_raw)-train_ds_size
     train_ds_raw, val_ds_raw=random_split(ds_raw, [train_ds_size, val_ds_size])
@@ -48,19 +54,7 @@ def get_ds(config):
     train_ds=BiLingualData(train_ds_raw, tokenizer_src, tokenizer_trgt, config['src_lang'], config['trgt_lang'], config['seq_len'])
     val_ds=BiLingualData(val_ds_raw, tokenizer_src, tokenizer_trgt, config['src_lang'], config['trgt_lang'], config['seq_len'])
 
-    max_len_src=0
-    max_len_trgt=0
-
-    for item in ds_raw:
-        src_ids=tokenizer_src.encode(item[config['src_lang']]).ids
-        trgt_ids=tokenizer_trgt.encode(item[config['trgt_lang']]).ids
-        max_len_src=max(max_len_src, len(src_ids))
-        max_len_trgt=max(max_len_trgt, len(trgt_ids))
-
-    print(f"Max length of source sentence:{max_len_src}")
-    print(f"Max length of target sentence:{max_len_trgt}")
-
-    train_dataloader=DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
+    train_dataloader=DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True, num_workers=4)
     val_dataloader=DataLoader(train_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_trgt
@@ -69,6 +63,7 @@ def get_model(config, vocab_src_len, vocab_trgt_len):
     model=build_transformer(vocab_src_len, vocab_trgt_len, config['seq_len'],config['seq_len'], config['d_model'])
     return model
 
+# def run_validation()
 def train_model(config):
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device:{device}")
@@ -134,6 +129,7 @@ def train_model(config):
             },
             model_filename
         )
+
 
 if __name__=='__main__':
     warnings.filterwarnings('ignore')

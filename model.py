@@ -35,7 +35,7 @@ class PositionalEmbedding(nn.Module):
         self.register_buffer("pe",pe)
 
     def forward(self, x):
-        x = x + self.pe[:, :x.size(1), :].requires_grad(False)
+        x = x + self.pe[:, :x.size(1), :].requires_grad_(False)
         return self.dropout(x)
 
 class LayerNormalization(nn.Module):
@@ -47,8 +47,8 @@ class LayerNormalization(nn.Module):
         self.bias=nn.Parameter(torch.zeros(1))
 
     def forward(self,x):
-        mean=x.mean(dim=-1,keep_dim=True)
-        std=x.std(dim=-1,keep_dim=True)
+        mean=x.mean(dim=-1,keepdim=True)
+        std=x.std(dim=-1,keepdim=True)
 
         return self.alpha*(x-mean)/(std+self.eps) +self.bias
     
@@ -86,7 +86,7 @@ class MultiHeadAttention(nn.Module):
         d_k=query.shape[-1]
         attention_score=(query @ key.transpose(-2,-1))/math.sqrt(d_k)
 
-        if mask:
+        if mask is not None:
             attention_score.masked_fill(mask==0,-1e9)
 
         attention_score=attention_score.softmax(dim=-1)
@@ -105,7 +105,7 @@ class MultiHeadAttention(nn.Module):
         value=value.view(value.shape[0],value.shape[1],self.h,self.d_k).transpose(1,2)
 
         x,attention_score=MultiHeadAttention.attention(query,key,value,mask,self.dropout)
-        x=x.transpose(1,2).contiquous().view(x.shape[0],-1,self.h*self.d_k)
+        x=x.transpose(1,2).contiguous().view(x.shape[0],-1,self.h*self.d_k)
 
         return self.w_o(x)
 
@@ -195,14 +195,14 @@ class Transformer(nn.Module):
         self.projection_layer=projection_layer
 
     def encode(self, src, src_mask):
-        src-self.src_embed(src)
+        src=self.src_embed(src)
         src=self.src_pos(src)
-        return self.encoder(src)
+        return self.encoder(src, src_mask)
 
     def decode(self, encoder_output, src_mask, trgt,trgt_mask):
         trgt=self.trgt_embed(trgt)
         trgt=self.trgt_pos(trgt)
-        return self.decode(trgt, encoder_output, src_mask, trgt_mask)
+        return self.decoder(trgt, encoder_output, src_mask, trgt_mask)
 
     def project(self,x):
         return self.projection_layer(x)
